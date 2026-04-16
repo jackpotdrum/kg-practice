@@ -143,6 +143,83 @@ WHERE user_id IN (101, 102, 103);
 
 ---
 
+## 7. 期間を指定してデータを取得したい
+
+### 使うもの
+- WHERE
+- 比較演算子（`>=`, `<`）
+
+### 最小形（開始日以上・終了日未満）
+```sql
+SELECT *
+FROM sales
+WHERE order_date >= '2026-03-01'
+  AND order_date < '2026-04-01';
+```
+
+### 今回の3月データ例（顧客ごと集計つき）
+```sql
+SELECT
+  customer_id,
+  SUM(amount) AS total_amount
+FROM sales
+WHERE order_date >= '2026-03-01'
+  AND order_date < '2026-04-01'
+GROUP BY customer_id
+HAVING SUM(amount) >= 50000
+ORDER BY total_amount DESC;
+```
+
+### 使い分けメモ
+- 日付の期間抽出は `BETWEEN` よりも「`>= 開始` かつ `< 終了`」が安全
+- `DATETIME` 型でも月末23:59:59問題を避けやすい
+- 期間条件は `WHERE`、集計条件は `HAVING`
+
+---
+
+## 8. グループごとに計算したいが、元の各行は残したい
+
+### 使うもの
+- PARTITION BY（ウィンドウ関数）
+- ROW_NUMBER / RANK / DENSE_RANK / SUM OVER など
+
+### 最小形（カテゴリごと順位）
+```sql
+SELECT
+  category,
+  product_id,
+  total_sales,
+  ROW_NUMBER() OVER (
+    PARTITION BY category
+    ORDER BY total_sales DESC, product_id ASC
+  ) AS rank_in_category
+FROM product_sales;
+```
+
+### 最小形（ユーザーごとの累積）
+```sql
+SELECT
+  user_id,
+  purchased_at,
+  amount,
+  SUM(amount) OVER (
+    PARTITION BY user_id
+    ORDER BY purchased_at
+  ) AS running_amount
+FROM purchases;
+```
+
+### GROUP BY との違い
+- `GROUP BY`: 1グループ1行に集約（行数が減る）
+- `PARTITION BY`: 行数を減らさず、グループ内で順位や累積を計算
+
+### 使い分けメモ
+- 明細を残したまま「グループ内Top-N」や「累積」を出すなら `PARTITION BY`
+- 集計結果だけ欲しいなら `GROUP BY`
+- Top-N per group の定番は「集計CTE -> `ROW_NUMBER() OVER (PARTITION BY ...)` -> `rank <= N`」
+
+---
+
 ## 関連
 
 - 句ごとの整理: [SQL句リファレンス.md](SQL句リファレンス.md)

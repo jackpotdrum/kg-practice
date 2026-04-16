@@ -173,6 +173,88 @@ WHERE EXISTS (
 
 ---
 
+## 7. WHERE と HAVING の使い分け
+
+### 先に結論
+- 行の条件は WHERE
+- 集計結果（グループ）の条件は HAVING
+
+### 処理順イメージ
+1. `FROM`
+2. `WHERE`（集計前の行を絞る）
+3. `GROUP BY`（グループ化）
+4. `HAVING`（集計後のグループを絞る）
+5. `SELECT`
+6. `ORDER BY`
+
+### 典型パターン
+```sql
+SELECT
+  customer_id,
+  SUM(amount) AS total_amount
+FROM sales
+WHERE order_date >= '2026-03-01'
+  AND order_date < '2026-04-01'
+GROUP BY customer_id
+HAVING SUM(amount) >= 50000
+ORDER BY total_amount DESC;
+```
+
+### よくあるミス
+- `WHERE SUM(amount) >= 50000` と書く（集計前なので不可）
+- 全体合計のサブクエリで判定してしまい、顧客ごとの条件になっていない
+- `GROUP BY` の列名スペルミス（例: `costomer_id`）
+
+---
+
+## 8. PARTITION BY（行を残したままグループ内計算）
+
+### 何をする句か
+- ウィンドウ関数の計算単位を「グループごと」に分ける
+- ただし `GROUP BY` と違って、元の各行は消えない
+
+### 先に結論
+- `GROUP BY`: グループごとに集約し、行数が減る
+- `PARTITION BY`: グループごとに計算するが、行数はそのまま
+
+### 典型パターン（カテゴリごとの順位）
+```sql
+SELECT
+  category,
+  product_id,
+  total_sales,
+  ROW_NUMBER() OVER (
+    PARTITION BY category
+    ORDER BY total_sales DESC, product_id ASC
+  ) AS rank_in_category
+FROM product_sales;
+```
+
+### 典型パターン（ユーザーごとの累積）
+```sql
+SELECT
+  user_id,
+  purchased_at,
+  amount,
+  SUM(amount) OVER (
+    PARTITION BY user_id
+    ORDER BY purchased_at
+  ) AS running_amount
+FROM purchases;
+```
+
+### GROUP BY との違い（最重要）
+- `GROUP BY` は1グループ1行にまとめる（明細は消える）
+- `PARTITION BY` は明細を残したまま、順位・累積・前日比較などを計算できる
+- 試験のTop-N per groupは、まず集計してから `ROW_NUMBER() OVER (PARTITION BY ...)` を付ける形が定番
+
+### よくあるミス
+- `PARTITION BY` を忘れて全体順位になってしまう
+- 同点時ルールを `ORDER BY` に書かず、結果が不安定になる
+- `ROW_NUMBER()` の別名を同じSELECTの `WHERE` で直接使ってしまう（CTE/サブクエリで包む）
+
+---
+
 ## 関連
 
 - 逆引き: [逆引き_やりたいことからSQLを選ぶ.md](逆引き_やりたいことからSQLを選ぶ.md)
