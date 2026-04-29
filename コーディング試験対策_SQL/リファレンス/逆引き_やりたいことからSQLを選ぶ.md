@@ -220,6 +220,98 @@ FROM purchases;
 
 ---
 
+## 9. `timestamp` を日付にしたい / 割り算を小数で計算したい
+
+### 使うもの
+- 型キャスト（PostgreSQLの `::`）
+
+### 最小形
+```sql
+SELECT
+  signup_at::date AS signup_date,
+  ROUND(retained_users::numeric / cohort_size, 4) AS retention_rate
+FROM retention_daily;
+```
+
+### 使い分けメモ
+- 日単位で比較・集計したいなら `::date`
+- 率計算で小数を落としたくないなら `::numeric`
+
+---
+
+## 10. 条件を満たすユーザー数だけ数えたい（重複は除外したい）
+
+### 使うもの
+- CASE
+- COUNT(DISTINCT ...)
+
+### 最小形
+```sql
+COUNT(DISTINCT CASE
+  WHEN login_date = signup_date + 1 THEN user_id
+END) AS d1_retained_users
+```
+
+### 使い分けメモ
+- `CASE WHEN` で条件一致時のみ `user_id` を返す
+- 条件不一致は `NULL` になる
+- `COUNT` は `NULL` を数えない
+- `DISTINCT` で同一ユーザー重複を除外できる
+
+---
+
+## 11. 日付の「翌日」を書きたい（`+ 1` と `INTERVAL` のどちら？）
+
+### 使うもの
+- `date + integer`
+- `INTERVAL`
+
+### 最小形
+```sql
+-- date同士の比較
+login_date = signup_date + 1
+
+-- timestampに加算
+signup_at + INTERVAL '1 day'
+```
+
+### 使い分けメモ
+- `date` 型なら `+ 1` は1日加算として使える（PostgreSQL）
+- `timestamp` 型や時間単位を扱うなら `INTERVAL` を使う
+- 比較前に `::date` で型を揃えると安全
+
+---
+
+## 12. 左側の母集団を落とさずに結合したい（未ログインも含めたい）
+
+### 使うもの
+- LEFT JOIN
+
+### 最小形
+```sql
+SELECT
+  u.user_id,
+  l.login_date
+FROM users u
+LEFT JOIN logins l
+  ON l.user_id = u.user_id;
+```
+
+### JOIN との違い
+- `JOIN`（`INNER JOIN`）: 一致した行だけ残る
+- `LEFT JOIN`: 左テーブルは全件残る（一致しない右側は `NULL`）
+
+### 使い分けメモ
+- コホートの分母を正しく保持したい: `LEFT JOIN`
+- 一致レコードだけ見たい: `JOIN`
+- 「未ログインも含む集計」は `LEFT JOIN` を第一候補にする
+
+### 注意点
+- `LEFT JOIN` 後に右テーブル列を `WHERE` で絞りすぎると、未一致行が落ちる
+- 右テーブル条件は必要に応じて `ON` 側へ置く
+
+---
+
 ## 関連
 
 - 句ごとの整理: [SQL句リファレンス.md](SQL句リファレンス.md)

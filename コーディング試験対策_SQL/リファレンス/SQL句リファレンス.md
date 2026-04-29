@@ -255,6 +255,118 @@ FROM purchases;
 
 ---
 
+## 9. 型キャスト（`::date`, `::numeric`）
+
+### 何をする句か
+- 値を別の型として扱う（型変換）
+- PostgreSQLでは `式::型` の形で書ける
+
+### 典型パターン
+```sql
+SELECT
+  signup_at::date AS signup_date,
+  ROUND(d1_retained_users::numeric / cohort_size, 4) AS d1_retention_rate
+FROM retention_daily;
+```
+
+### 使いどころ
+- `timestamp` から日付だけ取り出して日次集計したい
+- 整数同士の割り算で小数を落とさず率を計算したい
+
+### 注意点
+- `::date` は時分秒を落とす
+- 率計算はどこかで `numeric` にしておく（例: `x::numeric / y`）
+
+---
+
+## 10. CASE式（条件分岐）
+
+### 何をする句か
+- 条件に応じて返す値を切り替える
+
+### 基本構文
+```sql
+CASE
+  WHEN 条件 THEN 値
+  WHEN 条件 THEN 値
+  ELSE 値
+END
+```
+
+### 典型パターン（条件付きユニーク人数）
+```sql
+COUNT(DISTINCT CASE
+  WHEN login_date = signup_date + 1 THEN user_id
+END) AS d1_retained_users
+```
+
+### 何が起きているか
+- 条件を満たす行だけ `user_id` を返す
+- 条件を満たさない行は `NULL`（`ELSE` 省略時）
+- `COUNT` は `NULL` を数えないため、条件一致した人数だけ数えられる
+- `DISTINCT` で同一ユーザーの重複を除外できる
+
+### 注意点
+- `DISTINCT CASE WHEN ...` は単体より `COUNT(DISTINCT CASE WHEN ... END)` で使うのが定番
+
+---
+
+## 11. `date + 1` と `INTERVAL` の使い分け（PostgreSQL）
+
+### 先に結論
+- `date` 型同士の比較なら `signup_date + 1` でOK（1日は整数加算）
+- `timestamp` に時間単位を足すなら `INTERVAL` を使う
+
+### 例
+```sql
+-- date同士
+login_date = signup_date + 1
+
+-- timestamp
+signup_at + INTERVAL '1 day'
+```
+
+### なぜ `+ 1` が許されるか
+- PostgreSQLに `date + integer` 演算子があり、整数は日数として解釈されるため
+
+### 注意点
+- 他DBでは同じ書き方がそのまま使えないことがある（方言差）
+- 比較前に型を揃えるとバグを減らせる（例: `login_at::date`, `signup_at::date`）
+
+---
+
+## 12. JOIN と LEFT JOIN の違い
+
+### 先に結論
+- `JOIN`（`INNER JOIN`）: 両テーブルで一致した行だけ残る
+- `LEFT JOIN`: 左テーブルの行は全件残り、一致しない右側は `NULL` になる
+
+### 典型パターン
+```sql
+-- INNER JOIN
+SELECT u.user_id, l.login_date
+FROM users u
+JOIN logins l
+  ON l.user_id = u.user_id;
+
+-- LEFT JOIN
+SELECT u.user_id, l.login_date
+FROM users u
+LEFT JOIN logins l
+  ON l.user_id = u.user_id;
+```
+
+### 使い分けメモ
+- 左側の母集団を絶対に欠損させたくない: `LEFT JOIN`
+- 一致レコードだけ欲しい: `JOIN`（`INNER JOIN`）
+- コホート分析や未ログインユーザーを含む集計は `LEFT JOIN` が基本
+
+### 注意点
+- `LEFT JOIN` の右テーブル条件を `WHERE` に書くと、実質 `INNER JOIN` になることがある
+- 右テーブル条件は必要に応じて `ON` 側へ置く
+
+---
+
 ## 関連
 
 - 逆引き: [逆引き_やりたいことからSQLを選ぶ.md](逆引き_やりたいことからSQLを選ぶ.md)
