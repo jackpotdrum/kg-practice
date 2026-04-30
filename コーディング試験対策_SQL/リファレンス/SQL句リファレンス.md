@@ -367,6 +367,44 @@ LEFT JOIN logins l
 
 ---
 
+## 13. MIN / MAX（最小値・最大値の集約）
+
+### 何をする句か
+- `MIN(列)` はグループ内の最小値を返す
+- `MAX(列)` はグループ内の最大値を返す
+- `GROUP BY` と組み合わせると「単位ごとの最小/最大」を取れる
+
+### 典型パターン（ユーザー×カテゴリの最初/最新注文日時）
+```sql
+SELECT
+  oi.category_id,
+  o.user_id,
+  MIN(o.ordered_at) AS first_order_at,
+  MAX(o.ordered_at) AS latest_order_at
+FROM orders o
+JOIN order_items oi
+  ON oi.order_id = o.order_id
+WHERE o.status = 'completed'
+GROUP BY
+  oi.category_id,
+  o.user_id;
+```
+
+### 使いどころ
+- 「最初の日付」「最新の日付」など、値そのものが欲しいとき
+- 件数や合計と同じ粒度で一緒に集約したいとき
+
+### 注意点
+- `MIN` / `MAX` は値を返すだけで、行全体は返さない
+- 「最新行の別カラム（例: 最新注文の単価）も欲しい」場合は、`ROW_NUMBER()` などで最新行を特定する
+- どの単位で最小/最大を取るかは `GROUP BY` の列で決まる
+
+### 補足（今回の模擬試験との対応）
+- `latest_order_at` は `MAX(ordered_at)` で取得できる
+- `order_count`, `total_amount`, `latest_order_at` を同じ `GROUP BY (category_id, user_id)` で作ると、粒度が揃って堅牢になりやすい
+
+---
+
 ## 関連
 
 - 逆引き: [逆引き_やりたいことからSQLを選ぶ.md](逆引き_やりたいことからSQLを選ぶ.md)

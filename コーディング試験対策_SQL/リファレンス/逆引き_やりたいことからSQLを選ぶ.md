@@ -312,6 +312,35 @@ LEFT JOIN logins l
 
 ---
 
+## 13. グループごとの最新日・最古日を取りたい
+
+### 使うもの
+- MAX（最新値）
+- MIN（最古値）
+- GROUP BY
+
+### 最小形
+```sql
+SELECT
+  category_id,
+  user_id,
+  MIN(ordered_at) AS first_order_at,
+  MAX(ordered_at) AS latest_order_at
+FROM user_category_orders
+GROUP BY category_id, user_id;
+```
+
+### 使い分けメモ
+- 日付や数値の「最大/最小の値そのもの」が欲しいだけなら `MIN` / `MAX` が最短
+- 件数・合計と同時に出したい場合も、同じ `GROUP BY` でまとめて作ると安全
+- 例: `order_count`, `total_amount`, `latest_order_at` を1つの集約CTEで作る
+
+### ここが境界（`MIN` / `MAX` では足りないケース）
+- 「最新行の他の列」も欲しいとき（例: 最新注文の `unit_price`）
+- この場合は `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ordered_at DESC)` で最新行を特定する
+
+---
+
 ## 関連
 
 - 句ごとの整理: [SQL句リファレンス.md](SQL句リファレンス.md)
